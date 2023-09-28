@@ -1,49 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html class="light">
 <head>
   <title>Log Lady</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2285%22>🪵</text></svg>">
-  <style>
-    body, h1 {
-      font-family: Helvetica, Arial, sans-serif;
-      font-size: 24px;
-    }
-    #logInput {
-      width: 100%;
-      font-size: 24px;
-      padding: 8px;
-    }
-    ul {
-      list-style-type: none;
-      padding: 0;
-    }
 
-    .entry-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .remove {
-      font-size: small;
-    }
-
-    li.selected {
-      background-color: #f2f2f2;
-    }
-    li .remove {
-      display: none;
-      margin-right: 8px;
-    }
-    li.selected .remove { display: inline; }
-    li .date { display: none; }
-    li.selected .date, li:hover .date { display: inline; }
-    li small {
-      opacity: 0.5;
-      font-size: 12px;
-    }
-
-
-  </style>
   <script>
     // general functions (move to separate file?)
     function timeAgo (pastDate) {
@@ -70,11 +30,80 @@
       return `${diffInDays} day ${remainingHours} hr ago`
     }
   </script>
+
+  <style>
+    body, h1 {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 24px;
+    }
+
+    #logInput {
+      width: 100%;
+      font-size: 24px;
+      padding: 8px;
+    }
+
+    .info-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 16px;
+      margin-top: 8px;
+    }
+    .entry-count {
+      opacity: 0.5;
+    }
+    .toggle {
+      cursor: pointer;
+    }
+    html.dark {
+      background-color: #333;
+      color: #fff;
+    }
+    html.dark .toggle:after {
+      content: '☀️';
+    }
+    html.light .toggle:after {
+      content: '🌑';
+    }
+
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    .entry-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .remove {
+      font-size: small;
+    }
+
+    li.selected {
+      background-color: #f2f2f2;
+    }
+    li .remove {
+      display: none;
+      margin-right: 8px;
+    }
+    li.selected .remove { display: inline; }
+    li .date { display: none; }
+    li.selected .date, li:hover .date { display: inline; }
+    li small {
+      opacity: 0.5;
+      font-size: 12px;
+    }
+  </style>
 </head>
 <body>
   <form id="logForm">
     <input type="text" id="logInput">
   </form>
+  <div class="info-container">
+    <span class="entry-count">0 entries</span>
+    <span class="toggle" id="darkModeToggle"></span>
+  </div>
 
   <ul id="logList"></ul>
 
@@ -83,11 +112,15 @@
     const logInput = document.getElementById('logInput')
     const logList = document.getElementById('logList')
 
+    const entryCountSpan = document.querySelector('.entry-count');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+
     const logKey = 'logs'
 
     // Load previous logs
     let logs = JSON.parse(localStorage.getItem(logKey)) || []
     logs.forEach(displayEntry)
+    updateEntryCount()
 
     // Event handler for submit
     logForm.addEventListener('submit', function (event) {
@@ -107,39 +140,51 @@
       }
     })
 
-  // Display log entries
-  function displayEntry(entry) {
-    const date = new Date(entry.timestamp)
-    const formattedDate = `${date.toISOString().split('T')[0]} ${date.toTimeString().split(' ')[0].slice(0, 5)}`
-    const since = timeAgo(date)
+    // Initialize entry count and dark mode
+    function updateEntryCount() {
+      const count = logs.length;
+      entryCountSpan.textContent = `${count} ${count === 1 ? 'entry' : 'entries'}`;
+    }
 
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <div class="entry-container">
-        <div>
-          <div>${entry.text}</div>
-          <small class="since">${since}</small> <small class="date">${formattedDate}</small>
+    function toggleDarkMode() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      document.documentElement.className = isDark ? 'dark' : 'light'
+    }
+    darkModeToggle.addEventListener('click', toggleDarkMode);
+
+    // Display log entries
+    function displayEntry(entry) {
+      const date = new Date(entry.timestamp)
+      const formattedDate = `${date.toISOString().split('T')[0]} ${date.toTimeString().split(' ')[0].slice(0, 5)}`
+      const since = timeAgo(date)
+
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="entry-container">
+          <div>
+            <div>${entry.text}</div>
+            <small class="since">${since}</small> <small class="date">${formattedDate}</small>
+          </div>
+          <a href="#" class="remove">Remove</a>
         </div>
-        <a href="#" class="remove">Remove</a>
-      </div>
-    `;
+      `;
 
-    li.addEventListener('click', function() {
-      // remove all selections
-      document.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'))
-      li.classList.toggle('selected')
-      const removeLink = li.querySelector('.remove')
-    });
+      li.addEventListener('click', function() {
+        // remove all selections
+        document.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'))
+        li.classList.toggle('selected')
+        const removeLink = li.querySelector('.remove')
+      });
 
-    li.querySelector('.remove').addEventListener('click', function(event) {
-      event.stopPropagation();
-      logs = logs.filter(e => e.timestamp !== entry.timestamp);
-      localStorage.setItem(logKey, JSON.stringify(logs));
-      logList.removeChild(li);
-    });
+      li.querySelector('.remove').addEventListener('click', function(event) {
+        event.stopPropagation();
+        logs = logs.filter(e => e.timestamp !== entry.timestamp);
+        localStorage.setItem(logKey, JSON.stringify(logs));
+        logList.removeChild(li);
+      });
 
-    logList.insertBefore(li, logList.firstChild);
-  }
+      logList.insertBefore(li, logList.firstChild);
+    }
   </script>
 
 </body>
