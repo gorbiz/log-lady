@@ -80,14 +80,14 @@
       font-size: small;
     }
 
-    li.selected {
+    li.selected, li:hover {
       background-color: #f2f2f2;
     }
     li .remove {
       display: none;
       margin-right: 8px;
     }
-    li.selected .remove { display: inline; }
+    li.selected .remove, li:hover .remove { display: inline; }
     li .date { display: none; }
     li.selected .date, li:hover .date { display: inline; }
     li small {
@@ -173,8 +173,7 @@
         // remove all selections
         document.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'))
         li.classList.toggle('selected')
-        const removeLink = li.querySelector('.remove')
-      });
+      })
 
       li.querySelector('.remove').addEventListener('click', function(event) {
         event.stopPropagation();
