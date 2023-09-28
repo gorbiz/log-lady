@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple Logger</title>
+</head>
+<body>
+
+  <h1>Simple Logger</h1>
+  <label for="logInput">Log Entry:</label>
+  <textarea id="logInput" rows="4" cols="50"></textarea>
+  <button id="submitBtn">Submit</button>
+
+  <ul id="logList"></ul>
+
+  <script>
+    // DOM references
+    const logInput = document.getElementById('logInput')
+    const logList = document.getElementById('logList')
+    const submitBtn = document.getElementById('submitBtn')
+
+    // Event handler for submit
+    submitBtn.addEventListener('click', function () {
+      const text = logInput.value
+      if (text) {
+        const timestamp = new Date().toISOString()
+        const entry = {
+          text,
+          device: navigator.userAgent,
+          timestamp
+          // GPS and other properties can be added here
+        }
+        // Save to localStorage
+        localStorage.setItem(timestamp, JSON.stringify(entry))
+        // Display entry
+        displayEntry(entry)
+      }
+    })
+
+    // Load previous logs
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      const entry = JSON.parse(localStorage.getItem(key))
+      displayEntry(entry)
+    }
+
+    // Display log entries
+    function displayEntry (entry) {
+      const li = document.createElement('li')
+      li.textContent = `[${entry.timestamp}] ${entry.text}`
+      logList.appendChild(li)
+    }
+  </script>
+
+</body>
+</html>
