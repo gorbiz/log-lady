@@ -1,190 +1,108 @@
 <!DOCTYPE html>
-<html class="light">
+<html lang="en">
+
 <head>
-  <title>Log Lady</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2285%22>🪵</text></svg>">
-
-  <script>
-    // general functions (move to separate file?)
-    function timeAgo (pastDate) {
-      const now = new Date()
-      const diffInSeconds = Math.floor((now - pastDate) / 1000)
-
-      if (diffInSeconds < 60) {
-        return `${diffInSeconds} sec ago`
-      }
-
-      const diffInMinutes = Math.floor(diffInSeconds / 60)
-      if (diffInMinutes < 60) {
-        return `${diffInMinutes} min ago`
-      }
-
-      const diffInHours = Math.floor(diffInMinutes / 60)
-      if (diffInHours < 24) {
-        const remainingMinutes = diffInMinutes % 60
-        return `${diffInHours} h ${remainingMinutes} min ago`
-      }
-
-      const diffInDays = Math.floor(diffInHours / 24)
-      const remainingHours = diffInHours % 24
-      return `${diffInDays} day ${remainingHours} hr ago`
-    }
-  </script>
+  <title>LogLady 1.0</title>
 
   <style>
-    body, h1 {
-      font-family: Helvetica, Arial, sans-serif;
-      font-size: 24px;
-    }
-
-    #logInput {
-      width: 100%;
-      font-size: 24px;
-      padding: 8px;
-    }
-
-    .info-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 16px;
-      margin-top: 8px;
-    }
-    .entry-count {
-      opacity: 0.5;
-    }
-    .toggle {
-      cursor: pointer;
-    }
-    html.dark {
-      background-color: #333;
-      color: #fff;
-    }
-    html.dark .toggle:after {
-      content: '☀️';
-    }
-    html.light .toggle:after {
-      content: '🌑';
-    }
-
-    ul {
-      list-style-type: none;
-      padding: 0;
-    }
-    .entry-container {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .remove {
-      font-size: small;
-    }
-
-    li.selected, li:hover {
-      background-color: #f2f2f2;
-    }
-    li .remove {
-      display: none;
-      margin-right: 8px;
-    }
-    li.selected .remove, li:hover .remove { display: inline; }
-    li .date { display: none; }
-    li.selected .date, li:hover .date { display: inline; }
-    li small {
-      opacity: 0.5;
-      font-size: 12px;
-    }
+    ul.logs { list-style: none; padding: 0; }
+    ul.logs li { margin-bottom: 4px; }
+    ul.logs li a.remove { font-size: 12px; opacity: 0.5; text-decoration: underline; cursor: pointer; }
+    ul.logs .date { opacity: 0.66; font-size: 12px; }
   </style>
-</head>
-<body>
-  <form id="logForm">
-    <input type="text" id="logInput">
-  </form>
-  <div class="info-container">
-    <span class="entry-count">0 entries</span>
-    <span class="toggle" id="darkModeToggle"></span>
-  </div>
-
-  <ul id="logList"></ul>
 
   <script>
-    // DOM references
-    const logInput = document.getElementById('logInput')
-    const logList = document.getElementById('logList')
+    // core.js / common.js: the "library" functions that can be used in the app
 
-    const entryCountSpan = document.querySelector('.entry-count');
-    const darkModeToggle = document.getElementById('darkModeToggle');
+    const emitEvent = (eventName, detail) => { // convenience function
+      document.dispatchEvent(new CustomEvent(eventName, { detail }))
+    }
+    const onEvent = (eventName, handler) => {
+      document.addEventListener(eventName, handler)
+    }
 
-    const logKey = 'logs'
-
-    // Load previous logs
-    let logs = JSON.parse(localStorage.getItem(logKey)) || []
-    logs.forEach(displayEntry)
-    updateEntryCount()
-
-    // Event handler for submit
-    logForm.addEventListener('submit', function (event) {
-      event.preventDefault()
-      const text = logInput.value
-      if (text) {
-        const timestamp = new Date().toISOString()
-        const entry = {
-          text,
-          device: navigator.userAgent,
-          timestamp
-        }
-        logs.push(entry)
-        localStorage.setItem(logKey, JSON.stringify(logs))
-        displayEntry(entry)
-        logInput.value = ''
+    // storage "engine" (can be replaced with IndexedDB, etc.)
+    const storage = {
+      get() {
+        return JSON.parse(localStorage.getItem('logs')) || []
+      },
+      set(logs) {
+        logs = logs.sort((a, b) => a.created < b.created ? 1 : -1)
+        localStorage.setItem('logs', JSON.stringify(logs))
+      },
+      add(log) {
+        const logs = this.get()
+        logs.push(log)
+        this.set(logs)
+      },
+      remove (id) {
+        const logs = this.get()
+        const index = logs.findIndex(log => log.id === id)
+        if (index === -1) return
+        logs.splice(index, 1)
+        this.set(logs)
+      },
+      clear() {
+        this.set([])
       }
-    })
-
-    // Initialize entry count and dark mode
-    function updateEntryCount() {
-      const count = logs.length;
-      entryCountSpan.textContent = `${count} ${count === 1 ? 'entry' : 'entries'}`;
-    }
-
-    function toggleDarkMode() {
-      const isDark = document.documentElement.classList.toggle('dark');
-      document.documentElement.className = isDark ? 'dark' : 'light'
-    }
-    darkModeToggle.addEventListener('click', toggleDarkMode);
-
-    // Display log entries
-    function displayEntry(entry) {
-      const date = new Date(entry.timestamp)
-      const formattedDate = `${date.toISOString().split('T')[0]} ${date.toTimeString().split(' ')[0].slice(0, 5)}`
-      const since = timeAgo(date)
-
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <div class="entry-container">
-          <div>
-            <div>${entry.text}</div>
-            <small class="since">${since}</small> <small class="date">${formattedDate}</small>
-          </div>
-          <a href="#" class="remove">Remove</a>
-        </div>
-      `;
-
-      li.addEventListener('click', function() {
-        // remove all selections
-        document.querySelectorAll('.selected').forEach(e => e.classList.remove('selected'))
-        li.classList.toggle('selected')
-      })
-
-      li.querySelector('.remove').addEventListener('click', function(event) {
-        event.stopPropagation();
-        logs = logs.filter(e => e.timestamp !== entry.timestamp);
-        localStorage.setItem(logKey, JSON.stringify(logs));
-        logList.removeChild(li);
-      });
-
-      logList.insertBefore(li, logList.firstChild);
     }
   </script>
+</head>
 
+<body>
+  <form onsubmit="submitLog(event)">
+    <input type="text" id="text" name="text" placeholder="log here...">
+  </form>
+  <ul class="logs"></ul>
+  <button onclick="confirm('Sure?') && clearLogs()">❌ Remove all</button>
+
+  <script>
+    // core.js
+    
+    function submitLog (event) {
+      event.preventDefault()
+      const input = document.querySelector('input#text')
+      const text = input.value.trim()
+      if (!text) return
+      const created = (new Date()).toISOString()
+      const id = created // TODO add initials
+      emitEvent('logAdded', { id, text, created })
+      input.value = ''
+    }
+    const removeLog = (id) => emitEvent('logRemoved', { id })
+    const clearLogs = () => emitEvent('logsCleared')
+
+    // NOTE These events can come from user or server (another user / device / tab)
+    onEvent('logAdded', ({ detail: log }) => {
+      storage.add(log)
+      renderLogs()
+    })
+    onEvent('logRemoved', ({ detail: { id } }) => {
+      storage.remove(id)
+      renderLogs()
+    })
+    onEvent('logsCleared', () => {
+      storage.clear()
+      renderLogs()
+    })
+
+    function renderLogs () {
+      const logToHTML = log => {
+        const date = log.created.replace('T', ' ').split('.')[0]
+        return `${log.text} <a class="remove" onclick="removeLog('${log.id}')">remove</a>
+          <div class="date">${date}</div>`
+      }
+      const logs = storage.get()
+      const el = document.querySelector('ul.logs')
+      el.innerHTML = logs.map(log => `<li id="log-${log.id}">${logToHTML(log)}</li>`).join('')
+    }
+
+    renderLogs()
+
+    // TODO: sync.js
+  </script>
 </body>
 </html>
