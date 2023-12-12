@@ -26,16 +26,6 @@
     import { LogLady } from './loglady.js'
     const logLady = new LogLady()
 
-    function submitLog (event) {
-      event.preventDefault()
-      const input = document.querySelector('input#text')
-      logLady.add({ text: input.value.trim() })
-      input.value = ''
-    }
-
-    // TODO consider custom event 
-    logLady.on('logAdded logRemoved logsCleared', () =>  renderLogs())
-
     function renderLogs () {
       const logs = logLady.get() // NOTE instead of this we could usually change the DOM for the new / modified log
       const logToHTML = log => {
@@ -43,16 +33,23 @@
         return `${log.text} <a class="remove">remove</a>
           <div class="date">${date}</div>`
       }
-      const el = document.querySelector('ul.logs')
-      el.innerHTML = logs.map(log => `<li id="log-${log.id}">${logToHTML(log)}</li>`).join('')
-      // add onclick to the remove links
-      logs.forEach(({ id }) => {
+      document.querySelector('ul.logs').innerHTML = logs.map(log => `<li id="log-${log.id}">${logToHTML(log)}</li>`).join('')
+      logs.forEach(({ id }) => { // add onclick to the remove links
         const el = document.getElementById(`log-${id}`)
         el.querySelector('a.remove').addEventListener('click', () => logLady.remove(id))
       })
     }
 
-    document.getElementById('logForm').addEventListener('submit', submitLog)
+    logLady.on('logAdded logRemoved logsCleared', () =>  renderLogs())
+
+    document.getElementById('logForm').addEventListener('submit', (event) => {
+      event.preventDefault()
+      const input = document.querySelector('input#text')
+      logLady.add({ text: input.value.trim() })
+      input.value = ''
+
+    })
+  
     document.getElementById('remove-all').addEventListener('click', () => {
       if (confirm('Sure?')) logLady.clear()
     })
