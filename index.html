@@ -13,96 +13,51 @@
     ul.logs li a.remove { font-size: 12px; opacity: 0.5; text-decoration: underline; cursor: pointer; }
     ul.logs .date { opacity: 0.66; font-size: 12px; }
   </style>
-
-  <script>
-    // core.js / common.js: the "library" functions that can be used in the app
-
-    const emitEvent = (eventName, detail) => { // convenience function
-      document.dispatchEvent(new CustomEvent(eventName, { detail }))
-    }
-    const onEvent = (eventName, handler) => {
-      document.addEventListener(eventName, handler)
-    }
-
-    // storage "engine" (can be replaced with IndexedDB, etc.)
-    const storage = {
-      get() {
-        return JSON.parse(localStorage.getItem('logs')) || []
-      },
-      set(logs) {
-        logs = logs.sort((a, b) => a.created < b.created ? 1 : -1)
-        localStorage.setItem('logs', JSON.stringify(logs))
-      },
-      add(log) {
-        const logs = this.get()
-        logs.push(log)
-        this.set(logs)
-      },
-      remove (id) {
-        const logs = this.get()
-        const index = logs.findIndex(log => log.id === id)
-        if (index === -1) return
-        logs.splice(index, 1)
-        this.set(logs)
-      },
-      clear() {
-        this.set([])
-      }
-    }
-  </script>
 </head>
 
 <body>
-  <form onsubmit="submitLog(event)">
+  <form id="logForm">
     <input type="text" id="text" name="text" placeholder="log here...">
   </form>
   <ul class="logs"></ul>
-  <button onclick="confirm('Sure?') && clearLogs()">❌ Remove all</button>
+  <button id="remove-all">❌ Remove all</button>
 
-  <script>
-    // core.js
-    
+  <script type="module">
+    import { LogLady } from './loglady.js'
+    const log = new LogLady()
+
     function submitLog (event) {
       event.preventDefault()
       const input = document.querySelector('input#text')
-      const text = input.value.trim()
-      if (!text) return
-      const created = (new Date()).toISOString()
-      const id = created // TODO add initials
-      emitEvent('logAdded', { id, text, created })
+      log.add({ text: input.value.trim() })
       input.value = ''
     }
-    const removeLog = (id) => emitEvent('logRemoved', { id })
-    const clearLogs = () => emitEvent('logsCleared')
 
-    // NOTE These events can come from user or server (another user / device / tab)
-    onEvent('logAdded', ({ detail: log }) => {
-      storage.add(log)
-      renderLogs()
-    })
-    onEvent('logRemoved', ({ detail: { id } }) => {
-      storage.remove(id)
-      renderLogs()
-    })
-    onEvent('logsCleared', () => {
-      storage.clear()
-      renderLogs()
-    })
+    // TODO consider custom event 
+    log.on('logAdded logRemoved logsCleared', () =>  renderLogs())
 
     function renderLogs () {
+      const logs = log.get() // NOTE instead of this we could usually change the DOM for the new / modified log
       const logToHTML = log => {
         const date = log.created.replace('T', ' ').split('.')[0]
-        return `${log.text} <a class="remove" onclick="removeLog('${log.id}')">remove</a>
+        return `${log.text} <a class="remove">remove</a>
           <div class="date">${date}</div>`
       }
-      const logs = storage.get()
       const el = document.querySelector('ul.logs')
       el.innerHTML = logs.map(log => `<li id="log-${log.id}">${logToHTML(log)}</li>`).join('')
+      // add onclick to the remove links
+      logs.forEach(entry => {
+        const el = document.getElementById(`log-${entry.id}`)
+        el.querySelector('a.remove').addEventListener('click', () => log.remove(entry.id))
+      })
     }
 
-    renderLogs()
+    document.getElementById('logForm').addEventListener('submit', submitLog)
+    document.getElementById('remove-all').addEventListener('click', () => {
+      if (confirm('Sure?')) log.clear()
+    })
 
-    // TODO: sync.js
+    renderLogs()
   </script>
 </body>
 </html>
