@@ -26,18 +26,17 @@
     import { LogLady } from './loglady.js'
     const logLady = new LogLady()
 
-    function renderLogs () {
-      const logs = logLady.get() // NOTE instead of this we could usually change the DOM for the new / modified log
-      const logToHTML = log => {
+    function renderLogs() {
+      const logs = logLady.get()
+      const logsList = document.querySelector('ul.logs')
+      const createLogHTML = log => {
         const date = log.created.replace('T', ' ').split('.')[0]
-        return `${log.text} <a class="remove">remove</a>
-          <div class="date">${date}</div>`
+        return `<li id="log-${log.id}">
+          ${log.text} <a class="remove" data-log-id="${log.id}">remove</a>
+          <div class="date">${date}</div>
+        </li>`
       }
-      document.querySelector('ul.logs').innerHTML = logs.map(log => `<li id="log-${log.id}">${logToHTML(log)}</li>`).join('')
-      logs.forEach(({ id }) => { // add onclick to the remove links
-        const el = document.getElementById(`log-${id}`)
-        el.querySelector('a.remove').addEventListener('click', () => logLady.remove(id))
-      })
+      logsList.innerHTML = logs.map(createLogHTML).join('')
     }
 
     logLady.on('logAdded logRemoved logsCleared', () =>  renderLogs())
@@ -50,6 +49,12 @@
 
     })
   
+    document.querySelector('ul.logs').addEventListener('click', event => {
+      if (!event.target.matches('a.remove')) return
+      const logId = event.target.dataset.logId
+      logLady.remove(logId)
+    })
+
     document.getElementById('remove-all').addEventListener('click', () => {
       if (confirm('Sure?')) logLady.clear()
     })

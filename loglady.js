@@ -35,7 +35,6 @@ function LogLady () {
   const storage = Storage('loglady')
 
   const emit = (eventName, detail) => { // convenience function
-    console.log(detail, '<-- detail')
     window.dispatchEvent(new CustomEvent(eventName, { detail }))
   }  
 
@@ -62,7 +61,6 @@ function LogLady () {
     },
     on (eventNames, handler) { // TODO move from here; makes no sense here
       const names = eventNames.split(' ')
-      console.log(names)
       names.forEach(name => window.addEventListener(name, handler))
     }
   }
