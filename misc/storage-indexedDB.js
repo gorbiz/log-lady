@@ -1,34 +1,29 @@
 // complete untested, written by Chat-GPT 4 2023-12-13
 
-class IndexedDBStorage {
-  constructor(dbName, storeName) {
-    this.dbName = dbName
-    this.storeName = storeName
-    this.db = null
-  }
+function IndexedDBStorage(dbName, storeName) {
+  let db = null
 
-  async open() {
-    if (this.db) return this.db
+  async function open() {
+    if (db) return db
 
-    const request = indexedDB.open(this.dbName, 1)
+    const request = indexedDB.open(dbName, 1)
     request.onupgradeneeded = event => {
       const db = event.target.result
-      db.createObjectStore(this.storeName, { keyPath: 'id' })
+      db.createObjectStore(storeName, { keyPath: 'id' })
     }
 
-    const dbOpen = await new Promise((resolve, reject) => {
+    db = await new Promise((resolve, reject) => {
       request.onerror = () => reject('IndexedDB error')
       request.onsuccess = () => resolve(request.result)
     })
 
-    this.db = dbOpen
-    return this.db
+    return db
   }
 
-  async get() {
-    await this.open()
-    const transaction = this.db.transaction([this.storeName], 'readonly')
-    const objectStore = transaction.objectStore(this.storeName)
+  async function get() {
+    await open()
+    const transaction = db.transaction([storeName], 'readonly')
+    const objectStore = transaction.objectStore(storeName)
     const request = objectStore.getAll()
 
     return new Promise((resolve, reject) => {
@@ -37,10 +32,10 @@ class IndexedDBStorage {
     })
   }
 
-  async add(entry) {
-    await this.open()
-    const transaction = this.db.transaction([this.storeName], 'readwrite')
-    const objectStore = transaction.objectStore(this.storeName)
+  async function add(entry) {
+    await open()
+    const transaction = db.transaction([storeName], 'readwrite')
+    const objectStore = transaction.objectStore(storeName)
     const request = objectStore.add(entry)
 
     return new Promise((resolve, reject) => {
@@ -49,10 +44,10 @@ class IndexedDBStorage {
     })
   }
 
-  async remove(id) {
-    await this.open()
-    const transaction = this.db.transaction([this.storeName], 'readwrite')
-    const objectStore = transaction.objectStore(this.storeName)
+  async function remove(id) {
+    await open()
+    const transaction = db.transaction([storeName], 'readwrite')
+    const objectStore = transaction.objectStore(storeName)
     const request = objectStore.delete(id)
 
     return new Promise((resolve, reject) => {
@@ -61,10 +56,10 @@ class IndexedDBStorage {
     })
   }
 
-  async clear() {
-    await this.open()
-    const transaction = this.db.transaction([this.storeName], 'readwrite')
-    const objectStore = transaction.objectStore(this.storeName)
+  async function clear() {
+    await open()
+    const transaction = db.transaction([storeName], 'readwrite')
+    const objectStore = transaction.objectStore(storeName)
     const request = objectStore.clear()
 
     return new Promise((resolve, reject) => {
@@ -72,8 +67,10 @@ class IndexedDBStorage {
       request.onsuccess = () => resolve()
     })
   }
+
+  return { get, add, remove, clear }
 }
 
 // Example usage:
-// const storage = new IndexedDBStorage('myDatabase', 'logEntries')
+// const storage = IndexedDBStorage('myDatabase', 'logEntries')
 // storage.add({ id: '123', text: 'This is a log entry', created: new Date() })
