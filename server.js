@@ -1,15 +1,19 @@
 const express = require('express')
+const fs = require('fs')
 const sqlite3 = require('sqlite3')
 const bodyParser = require('body-parser')
 
 const app = express()
-const db = new sqlite3.Database('logs.db')
+const db = new sqlite3.Database('loglady.db')
+
+// if public folder exists, serve it
+if (fs.existsSync('public')) app.use(express.static('public'))
 
 app.use(bodyParser.json())
 
 // Initialize the logs table with an additional 'bucket' column
 db.serialize(() => {
-  db.run('CREATE TABLE IF NOT EXISTS logs (id TEXT, bucket TEXT, text TEXT, created DATETIME, updated DATETIME, deletedAt DATETIME, PRIMARY KEY (id, bucket))')
+  db.run('CREATE TABLE IF NOT EXISTS logs (id TEXT, bucket TEXT, text TEXT, created DATETIME, updated DATETIME, deleted DATETIME, PRIMARY KEY (id, bucket))')
 })
 
 // Dynamic route to handle different buckets
@@ -38,9 +42,9 @@ app.put('/api/:bucket/:id', (req, res) => {
 // Delete a log
 app.delete('/api/:bucket/:id', (req, res) => {
   const { id, bucket } = req.params
-  const deletedAt = new Date().toISOString()
-  const sql = 'UPDATE logs SET deletedAt = ? WHERE id = ? AND bucket = ?'
-  db.run(sql, [deletedAt, id, bucket], (err) => {
+  const deleted = new Date().toISOString()
+  const sql = 'UPDATE logs SET deleted = ? WHERE id = ? AND bucket = ?'
+  db.run(sql, [deleted, id, bucket], (err) => {
     if (err) return res.status(500).send(err.message)
     res.send('Log deleted')
   })
@@ -50,8 +54,9 @@ app.delete('/api/:bucket/:id', (req, res) => {
 app.get('/api/:bucket', (req, res) => {
   const { bucket } = req.params
   const { lastSyncDate } = req.query
-  const sql = 'SELECT * FROM logs WHERE bucket = ? updated > ?'
+  const sql = 'SELECT * FROM logs WHERE bucket = ? AND updated > ?'
   db.all(sql, [bucket, lastSyncDate], (err, rows) => {
+    if (err) console.error(err)
     if (err) return res.status(500).send(err.message)
     res.json(rows)
   })
