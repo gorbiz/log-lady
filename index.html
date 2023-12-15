@@ -24,7 +24,7 @@
 
   <script type="module">
     import { LogLady } from './loglady.js'
-    const logLady = new LogLady()
+    const logLady = new LogLady({ server: true })
 
     function renderLogs() {
       const logs = logLady.get()
