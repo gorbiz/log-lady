@@ -1,74 +1,64 @@
-const express = require('express');
-const sqlite3 = require('sqlite3');
-const bodyParser = require('body-parser');
+const express = require('express')
+const sqlite3 = require('sqlite3')
+const bodyParser = require('body-parser')
 
-const app = express();
-const db = new sqlite3.Database('logs.db');
+const app = express()
+const db = new sqlite3.Database('logs.db')
 
-app.use(bodyParser.json());
+app.use(bodyParser.json())
 
-// Initialize the logs table
+// Initialize the logs table with an additional 'bucket' column
 db.serialize(() => {
-  db.run("CREATE TABLE IF NOT EXISTS logs (id TEXT PRIMARY KEY, text TEXT, created DATETIME, updated DATETIME, deletedAt DATETIME)");
-});
+  db.run('CREATE TABLE IF NOT EXISTS logs (id TEXT, bucket TEXT, text TEXT, created DATETIME, updated DATETIME, deletedAt DATETIME, PRIMARY KEY (id, bucket))')
+})
 
-// Add a new log
-app.post('/logs', (req, res) => {
-  const { id, text, created } = req.body;
-  const sql = "INSERT INTO logs (id, text, created, updated) VALUES (?, ?, ?, ?)";
-  db.run(sql, [id, text, created, created], (err) => {
-    if (err) {
-      res.status(500).send(err.message);
-      return;
-    }
-    res.status(201).send('Log added');
-  });
-});
+// Dynamic route to handle different buckets
+app.post('/api/:bucket', (req, res) => {
+  const { bucket } = req.params
+  const { id, text, created } = req.body
+  const sql = 'INSERT INTO logs (id, bucket, text, created, updated) VALUES (?, ?, ?, ?, ?)'
+  db.run(sql, [id, bucket, text, created, created], (err) => {
+    if (err) return res.status(500).send(err.message)
+    res.status(201).send(`Log added to bucket ${bucket}`)
+  })
+})
 
 // Update a log
-app.put('/logs/:id', (req, res) => {
-  const { id } = req.params;
-  const { text } = req.body;
-  const updated = new Date().toISOString();
-  const sql = "UPDATE logs SET text = ?, updated = ? WHERE id = ?";
-  db.run(sql, [text, updated, id], (err) => {
-    if (err) {
-      res.status(500).send(err.message);
-      return;
-    }
-    res.send('Log updated');
-  });
-});
+app.put('/api/:bucket/:id', (req, res) => {
+  const { id, bucket } = req.params
+  const { text } = req.body
+  const updated = new Date().toISOString()
+  const sql = 'UPDATE logs SET text = ?, updated = ? WHERE id = ? AND bucket = ?'
+  db.run(sql, [text, updated, id, bucket], (err) => {
+    if (err) return res.status(500).send(err.message)
+    res.send('Log updated')
+  })
+})
 
 // Delete a log
-app.delete('/logs/:id', (req, res) => {
-  const { id } = req.params;
-  const deletedAt = new Date().toISOString();
-  const sql = "UPDATE logs SET deletedAt = ? WHERE id = ?";
-  db.run(sql, [deletedAt, id], (err) => {
-    if (err) {
-      res.status(500).send(err.message);
-      return;
-    }
-    res.send('Log deleted');
-  });
-});
+app.delete('/api/:bucket/:id', (req, res) => {
+  const { id, bucket } = req.params
+  const deletedAt = new Date().toISOString()
+  const sql = 'UPDATE logs SET deletedAt = ? WHERE id = ? AND bucket = ?'
+  db.run(sql, [deletedAt, id, bucket], (err) => {
+    if (err) return res.status(500).send(err.message)
+    res.send('Log deleted')
+  })
+})
 
 // Fetch updates
-app.get('/logs', (req, res) => {
-  const { lastSyncDate } = req.query;
-  const sql = "SELECT * FROM logs WHERE updated > ? OR (deletedAt IS NOT NULL AND deletedAt > ?)";
-  db.all(sql, [lastSyncDate, lastSyncDate], (err, rows) => {
-    if (err) {
-      res.status(500).send(err.message);
-      return;
-    }
-    res.json(rows);
-  });
-});
+app.get('/api/:bucket', (req, res) => {
+  const { bucket } = req.params
+  const { lastSyncDate } = req.query
+  const sql = 'SELECT * FROM logs WHERE bucket = ? updated > ?'
+  db.all(sql, [bucket, lastSyncDate], (err, rows) => {
+    if (err) return res.status(500).send(err.message)
+    res.json(rows)
+  })
+})
 
 // Start the server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+  console.log(`Server is running on port ${PORT}`)
+})
