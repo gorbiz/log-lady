@@ -1,4 +1,5 @@
 /* global fetch localStorage CustomEvent */
+import io from 'https://cdn.socket.io/4.7.2/socket.io.esm.min.js'
 
 // storage "engine" (can be replaced with IndexedDB, etc.)
 
@@ -98,17 +99,21 @@ function Api ({ url, storage, socket } = {}) {
   }
 }
 
-function LogLady ({ storage, server, socket, bucket = 'logs' } = { }) {
+function LogLady ({ storage, server, socket, bucket = 'logs' } = {}) {
   storage = storage || Storage('loglady')
   if (server === true) server = '/api'
   const url = server ? `${server}/${bucket}` : null
+
+  if (socket === true) socket = io()
+  if (socket) socket.on('changes', (data) => { sync() })
+
   const api = server ? Api({ url, storage, socket }) : null
 
   // Call fetchUpdates when the app starts or comes online
   if (server) sync()
   window.addEventListener('online', sync) // TODO de-bounce? (in sync function)
 
-  const emit = (eventName, detail) => { // convenience function
+  const emit = (eventName, detail) => { // TODO (re)move
     window.dispatchEvent(new CustomEvent(eventName, { detail }))
   }
 

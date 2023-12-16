@@ -25,16 +25,8 @@
   <script src="https://cdn.socket.io/4.3.1/socket.io.min.js"></script>
 
   <script type="module">
-    const socket = io()
     import { LogLady } from './loglady.js'
-    const logLady = new LogLady({ server: true, socket })
-
-    // Listen to socket.io messages from the server
-    socket.on('changes', (data) => {
-      console.log('changes', data)
-      logLady.sync()
-    })
-
+    const logLady = new LogLady({ server: true, socket: true })
 
     function renderLogs() {
       const logs = logLady.get()
