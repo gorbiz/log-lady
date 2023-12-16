@@ -2,8 +2,36 @@ const express = require('express')
 const fs = require('fs')
 const sqlite3 = require('sqlite3')
 const bodyParser = require('body-parser')
+const http = require('http')
+const socketIO = require('socket.io')
 
 const app = express()
+
+// Create a server using the app
+const server = http.createServer(app)
+
+// Initialize socket.io
+const io = socketIO(server)
+
+// Handle socket.io connections
+const connectedSockets = {}
+io.on('connection', (socket) => {
+  console.log('A client connected')
+  connectedSockets[socket.id] = socket
+
+  // Send a message to all connected clients
+  socket.on('sendMessage', (message) => {
+    io.emit('messageReceived', message)
+  })
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    console.log('A client disconnected')
+    delete connectedSockets[socket.id]
+  })
+})
+
+// Start the server
 const db = new sqlite3.Database('loglady.db')
 
 // if public folder exists, serve it
@@ -58,9 +86,17 @@ app.put('/api/:bucket/:id', async (req, res) => {
 
   console.log(sql, params)
   db.run(sql, params, (err) => {
-    if (!err) return res.send({ change: true })
-    console.error(err)
-    res.status(500).send(err.message)
+    if (err) {
+      console.error(err)
+      return res.status(500).send(err.message)
+    }
+    res.send({ change: true })
+
+    const clientSocketId = req.headers['x-socket-id']
+    console.log('clientSocketId', clientSocketId)
+    if (clientSocketId && connectedSockets[clientSocketId]) {
+      connectedSockets[clientSocketId].broadcast.emit('changes', 'log added, updated or removed')
+    }
   })
 })
 
@@ -86,8 +122,7 @@ app.put('/api/:bucket/:id', async (req, res) => {
 //   })
 // })
 
-// Start the server
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`)
 })

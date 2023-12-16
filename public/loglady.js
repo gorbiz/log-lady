@@ -1,6 +1,5 @@
 /* global fetch localStorage CustomEvent */
 
-
 // storage "engine" (can be replaced with IndexedDB, etc.)
 
 function Storage (name) {
@@ -48,11 +47,11 @@ function HttpJSON (baseUrl) {
         body: JSON.stringify(data)
       })
     },
-    put ({ url, data }) {
+    put ({ url, data, headers }) {
       url = `${baseUrl}/${url}`
       return fetch(url, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       })
     }
@@ -60,8 +59,22 @@ function HttpJSON (baseUrl) {
   }
 }
 
-function Api ({ url, storage }) {
+function connectSocket (socket) {
+  return new Promise((resolve, reject) => {
+    socket.on('connect', () => { resolve() })
+    socket.on('connect_error', (error) => { reject(error) }) // Optional: handle connection error
+  })
+}
+
+function Api ({ url, storage, socket } = {}) {
   const http = HttpJSON(url)
+  console.log({ socket })
+
+  async function getSocketId () {
+    if (!socket) return null
+    if (!socket.connected) await connectSocket(socket)
+    return socket.id
+  }
 
   function markSynced (entry) {
     delete entry.synced
@@ -72,9 +85,12 @@ function Api ({ url, storage }) {
     get ({ id, since } = {}) {
       return http.get({ id, query: { since } })
     },
-    set (entry) {
+    async set (entry) {
       if (!navigator.onLine) return false
-      return http.put({ url: entry.id, data: entry }).then(response => {
+      const socketId = socket ? await getSocketId() : null
+      console.debug('set:', socketId)
+      const headers = socketId ? { 'X-Socket-Id': socketId } : {}
+      return http.put({ url: entry.id, data: entry, headers }).then(response => {
         if (response.ok) markSynced(entry)
         return response
       })
@@ -82,11 +98,11 @@ function Api ({ url, storage }) {
   }
 }
 
-function LogLady ({ storage, server, bucket = 'logs' } = { }) {
+function LogLady ({ storage, server, socket, bucket = 'logs' } = { }) {
   storage = storage || Storage('loglady')
   if (server === true) server = '/api'
   const url = server ? `${server}/${bucket}` : null
-  const api = server ? Api({ url, storage }) : null
+  const api = server ? Api({ url, storage, socket }) : null
 
   // Call fetchUpdates when the app starts or comes online
   if (server) sync()
@@ -96,7 +112,17 @@ function LogLady ({ storage, server, bucket = 'logs' } = { }) {
     window.dispatchEvent(new CustomEvent(eventName, { detail }))
   }
 
+  async function pushLocalChanges () {
+    const entries = storage.get({ includeDeleted: true }).filter(entry => entry.synced === false)
+    if (!entries.length) return false
+    console.debug('pushLocalChanges:', { nr: entries.length })
+    const promises = entries.map(entry => api.set(entry))
+    await Promise.all(promises)
+  }
+
   async function sync () {
+    if (!navigator.onLine) return false
+    await pushLocalChanges()
     const lastSync = localStorage.getItem('lastSync') || '1970-01-01T00:00:00.000Z'
     const entries = await api.get({ since: lastSync }) // TODO api.get
     let changes = false
@@ -152,6 +178,7 @@ function LogLady ({ storage, server, bucket = 'logs' } = { }) {
       // TODO syncLogWithServer(...) for each log
       emit('logsCleared')
     },
+    sync,
     on (eventNames, handler) { // TODO move from here; makes no sense here
       const names = eventNames.split(' ')
       names.forEach(name => window.addEventListener(name, handler))
