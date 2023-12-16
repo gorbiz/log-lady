@@ -20,7 +20,7 @@
     <input type="text" id="text" name="text" placeholder="log here...">
   </form>
   <ul class="logs"></ul>
-  <button id="remove-all">❌ Remove all</button>
+  <!-- <button id="remove-all">❌ Remove all</button> -->
 
   <script type="module">
     import { LogLady } from './loglady.js'
@@ -28,6 +28,7 @@
 
     function renderLogs() {
       const logs = logLady.get()
+      logs.sort((a, b) => new Date(b.created) - new Date(a.created)) // newest first
       const logsList = document.querySelector('ul.logs')
       const createLogHTML = log => {
         const date = log.created.replace('T', ' ').split('.')[0]
@@ -39,7 +40,7 @@
       logsList.innerHTML = logs.map(createLogHTML).join('')
     }
 
-    logLady.on('logAdded logRemoved logsCleared', () =>  renderLogs())
+    logLady.on('logAdded logRemoved logsCleared logsChanged', () =>  renderLogs())
 
     document.getElementById('logForm').addEventListener('submit', (event) => {
       event.preventDefault()
@@ -55,9 +56,9 @@
       logLady.remove(logId)
     })
 
-    document.getElementById('remove-all').addEventListener('click', () => {
-      if (confirm('Sure?')) logLady.clear()
-    })
+    // document.getElementById('remove-all').addEventListener('click', () => {
+    //   if (confirm('Sure?')) logLady.clear()
+    // })
 
     renderLogs()
   </script>

@@ -100,6 +100,7 @@ function LogLady ({ storage, server, bucket = 'logs' } = { }) {
     const lastSync = localStorage.getItem('lastSync') || '1970-01-01T00:00:00.000Z'
     const entries = await api.get({ since: lastSync }) // TODO api.get
     let changes = false
+    console.debug('sync:', { nr: entries.length, lastSync })
     entries.forEach(log => { // NOTE later ensure oldest first (for UI events)?
       const current = storage.get(log.id)
       if (current.modified >= log.modified) return
