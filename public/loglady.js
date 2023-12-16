@@ -1,146 +1,151 @@
 /* global fetch localStorage CustomEvent */
 
+
 // storage "engine" (can be replaced with IndexedDB, etc.)
+
 function Storage (name) {
+  function save (entriesObj) {
+    localStorage.setItem(name, JSON.stringify(entriesObj))
+  }
+
   const storage = {
     get ({ id = null, includeDeleted = false } = {}) {
       const logs = JSON.parse(localStorage.getItem(name)) || {}
       if (id) return logs[id] // NOTE ignores includeDeleted here
-      return Object.values(logs).filter(log => (includeDeleted || log.deleted))
+      return Object.values(logs).filter(log => (includeDeleted || !log.deleted))
     },
-    set (entriesObj) { // NOTE set all
-      localStorage.setItem(name, JSON.stringify(entriesObj))
-    },
-    add (entry) { // TODO rename to upsert?
+    set (entry) { // TODO rename to upsert?
       const entries = JSON.parse(localStorage.getItem(name)) || {}
       entries[entry.id] = entry
-      this.set(entries)
-    },
-    update (entry) { // TODO upsert instead, see above?
-      const entries = JSON.parse(localStorage.getItem(name)) || {}
-      entries[entry.id] = { ...entries[entry.id], ...entry }
-      this.set(entries)
+      save(entries)
     },
     remove (id) { // almost never used (soft delete instead)
       const entries = JSON.parse(localStorage.getItem(name)) || {}
       if (!entries[id]) return
       delete entries[id]
-      this.set(entries)
+      save(entries)
     },
     clear () {
-      this.set({})
+      save({})
     }
   }
   return storage
 }
 
-function Http (baseUrl, storage) { // NOTE passing storage is a bit convoluted... but handy also?
+function HttpJSON (baseUrl) {
+  return {
+    async get ({ url = '', query } = {}) {
+      url = `${baseUrl}/${url}`
+      if (query) url += '?' + new URLSearchParams(query).toString()
+      const res = await fetch(url)
+      return res.json()
+    },
+    post ({ url, data } = {}) { // NOTE never used (yet)
+      url = `${baseUrl}/${url}`
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+    },
+    put ({ url, data }) {
+      url = `${baseUrl}/${url}`
+      return fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+    }
+    // TODO delete (id) { ... }
+  }
+}
+
+function Api ({ url, storage }) {
+  const http = HttpJSON(url)
+
   function markSynced (entry) {
     delete entry.synced
-    storage.update(entry)
+    storage.set(entry)
   }
 
   return {
-    get ({ id = '', since } = {}) {
-      let url = `${baseUrl}/${id}`
-      if (since) url += `?since=${since}`
-      return fetch(url)
+    get ({ id, since } = {}) {
+      return http.get({ id, query: { since } })
     },
-    post (entry) {
+    set (entry) {
       if (!navigator.onLine) return false
-      return fetch(baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry)
-      })
-      .then(response => {
+      return http.put({ url: entry.id, data: entry }).then(response => {
         if (response.ok) markSynced(entry)
         return response
       })
-    },
-    put (entry) {
-      if (!navigator.onLine) return false
-      return fetch(`${baseUrl}/${entry.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry)
-      })
-      .then(response => {
-        if (response.ok) markSynced(entry)
-        return response
-      })
-    },
-    // delete (id) { ... }
+    }
   }
 }
 
 function LogLady ({ storage, server, bucket = 'logs' } = { }) {
   storage = storage || Storage('loglady')
   if (server === true) server = '/api'
-  const apiUrl = server ? `${server}/${bucket}` : null
-  let http = server ? Http(apiUrl, storage) : null
+  const url = server ? `${server}/${bucket}` : null
+  const api = server ? Api({ url, storage }) : null
 
   // Call fetchUpdates when the app starts or comes online
-  if (server) fetchUpdates()
-  window.addEventListener('online', fetchUpdates)
+  if (server) sync()
+  window.addEventListener('online', sync) // TODO de-bounce? (in sync function)
 
   const emit = (eventName, detail) => { // convenience function
     window.dispatchEvent(new CustomEvent(eventName, { detail }))
   }
 
-  
-  const lastSync = localStorage.getItem('lastSync') || '1970-01-01T00:00:00.000Z'
-  function sync () {
-    const entries = http.get({ since: lastSync }) // TODO api.get
-    entries.forEach(log => {
+  async function sync () {
+    const lastSync = localStorage.getItem('lastSync') || '1970-01-01T00:00:00.000Z'
+    const entries = await api.get({ since: lastSync }) // TODO api.get
+    let changes = false
+    entries.forEach(log => { // NOTE later ensure oldest first (for UI events)?
       const current = storage.get(log.id)
       if (current.modified >= log.modified) return
       storage.set(log)
+      changes = true
       // emit('logAdded', log) // TODO or? emit('logUpdated', update)
     })
     localStorage.setItem('lastSync', new Date().toISOString()) // TODO get from server instead
-    if (updates.length) emit('logsChanged') // basic 1.0
-    // later trigger one event per entry, oldest modified first
+    if (changes) emit('logsChanged') // basic 1.0
   }
-    
+
   // TODO realtime sync, pseudo-code:
   // io.on('added / modified', (entry) => {
   //   return sync()
   //   // Maybe 2.0
   //   current = storage.get(entry)
   //   if current.modified >= entry.modified return
-  //   storage.upsert(entry)
+  //   storage.set(entry)
   //   emit logsChanged
-  // }    
+  // }
 
   return {
     get (id = null) {
       return storage.get({ id })
     },
-    async add ({ text, created, id, extra } = {}) { // normally only text is passed
+    async add ({ text, extra } = {}) { // normaly only text is passed
       if (!text) return false
-
-      created = created || new Date()
-      id = created // TODO add initials
+      const created = new Date()
+      const id = created.toISOString() // TODO add initials
       const log = { id, text, created, synced: false }
       if (extra) log.extra = extra
 
-      storage.add(log)
+      storage.set(log)
       emit('logAdded', log)
 
-      if (server) http.post(log)
+      if (server) api.set(log)
     },
     async remove (id) {
       let log = storage.get({ id })
       if (!log) return
       log = { ...log, deleted: true, modified: new Date(), synced: false }
-
-      storage.update(log) // used to be: storage.remove(id)
+      storage.set(log) // used to be: storage.remove(id)
       emit('logRemoved', { id })
 
-      if (server) http.put(log)
+      if (server) api.set(log)
     },
-    fetchUpdates,
     clear () {
       storage.clear()
       // TODO syncLogWithServer(...) for each log
