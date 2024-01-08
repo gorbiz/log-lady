@@ -30,7 +30,7 @@
 
     function renderLogs() {
       const logs = logLady.get()
-      console.debug('renderLogs', logs.length)
+      // console.debug('renderLogs', logs.length)
       logs.sort((a, b) => new Date(b.created) - new Date(a.created)) // newest first
       const logsList = document.querySelector('ul.logs')
       const createLogHTML = log => {
@@ -44,6 +44,7 @@
     }
 
     logLady.on('logAdded logRemoved logsCleared logsChanged', () =>  renderLogs())
+    // logLady.on('change', renderLogs) // FIXME do this instead
 
     document.getElementById('logForm').addEventListener('submit', (event) => {
       event.preventDefault()
